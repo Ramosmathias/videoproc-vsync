@@ -6,7 +6,9 @@ Synchroniser deux vidéos d’un même contenu quand elles ont des résolutions 
 
 Projet individuel en C++ avec OpenCV. Le programme recale spatialement les images, conserve les images utiles dans un tampon circulaire et recherche les correspondances temporelles par programmation dynamique. OpenMP répartit le calcul des scores entre les images.
 
-## Résultat sur les 20 segments exportés
+## Résultat sur les vidéos originales
+
+Relancée sur les deux vidéos originales avec les mêmes repères temporels, la version publiée (commit `86082d9`) retrouve un **décalage initial de 72 images** dans la vidéo 2, soit **3,003 secondes**, et reproduit **exactement les 20 segments** du graphique ci-dessous. Le fichier `scores.txt` obtenu est identique octet pour octet à l’export d’origine.
 
 [Ouvrir le graphique interactif](https://ramosmathias.github.io/videoproc-vsync/) ou ouvrir [le fichier HTML](docs/index.html) dans un navigateur depuis une copie locale. Choisir un des sept zooms, utiliser la molette pour agrandir et faire glisser le tracé pour déplacer la vue.
 
@@ -18,17 +20,17 @@ Les sept zooms couvrent tous les passages horizontaux et verticaux de l’[expor
 
 Pour reproduire le graphique avec Python et Matplotlib, lancer `python reproduction/trace-alignement.py reproduction/scores-alignement-historique.txt assets/chemin-et-zooms.png --zooms`.
 
-## Démonstration
+## Démonstration synthétique
 
 ![Les deux flux synthétiques avant puis après l’alignement. L’image de référence 40 correspond à l’image 55 du flux décalé.](assets/apercu-alignement.png)
 
 [Voir la vidéo comparative de 14 secondes](assets/demonstration-vsync.webm)
 
-Le test utilise un flux de référence à 256 × 144 et un second à 128 × 72, tous deux à 5 images/s. Le flux de basse résolution a été décalé de **15 images**, soit **3 secondes**.
+Pour cette démonstration, le flux synthétique à 128 × 72 a été décalé volontairement de **15 images**, soit **3 secondes à 5 images/s**, par rapport au flux de référence à 256 × 144.
 
 Le test de cette version vérifie le segment **vidéo 1, indices 0 à 115 → vidéo 2, indices 15 à 130**. L’export reproduit le décalage constant de 3 secondes. [Voir la sortie du test](reproduction/scores-ajustement.txt)
 
-Le calcul peut démarrer au premier indice de la vidéo 1 ou plus loin dans la vidéo 2. Cette variante évite de redémarrer le coût à zéro au bord gauche à chaque nouvelle ligne. L’essai automatisé couvre le décalage initial positif à fréquence d’image identique. Les coupures et le décalage dans l’autre sens restent à vérifier.
+Le calcul peut démarrer au premier indice de la vidéo 1 ou plus loin dans la vidéo 2. Cette variante évite de redémarrer le coût à zéro au bord gauche à chaque nouvelle ligne. Le test synthétique automatisé couvre un décalage initial positif à fréquence d’image identique. Des essais contrôlés avec des coupures et avec un décalage initial dans l’autre sens restent à faire.
 
 ## Reproduire l’essai sous Windows
 
