@@ -1,0 +1,6 @@
+/build/
+/out/
+/.vs/
+/scores.txt
+__pycache__/
+*.user

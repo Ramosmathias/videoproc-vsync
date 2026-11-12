@@ -1,0 +1,6 @@
+=== SEGMENTS ===
+Format:
+[idDebutV1 ; idFinV1] ==> [idDebutV2 ; idFinV2] || [tDebutV1 ; tFinV1] ==> [tDebutV2 ; tFinV2] || nbImg || liaison || dt(diag)
+
+#   1 : [0 ; 0] ==> [0 ; 15] || [0 ; 0] ==> [0 ; 3000] || 15 || extra LoRes || dt=--
+#   2 : [0 ; 115] ==> [15 ; 130] || [0 ; 23000] ==> [3000 ; 26000] || 115 || High/LowRes || dt=[-3000 ; -3000]

@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chemin d’alignement · VideoProc</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --background: light-dark(#fff, #121a22);
+      --foreground: light-dark(#162c3d, #edf5fb);
+      --muted-foreground: light-dark(#506578, #aabfce);
+      --border: light-dark(#d9e3ec, #354453);
+      --viz-series-1: light-dark(#087f70, #56d6be);
+      --viz-series-2: light-dark(#b75612, #ffab6f);
+      --viz-series-3: light-dark(#3561ba, #88b4ff);
+      --font-size-base: 15px;
+    }
+    body {
+      max-width: 52rem;
+      margin: 1.5rem auto;
+      padding: 0 1rem;
+      background: var(--background);
+      color: var(--foreground);
+      font: var(--font-size-base) "Segoe UI", system-ui, sans-serif;
+    }
+    .btn, .form-select {
+      font: inherit;
+      color: inherit;
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 0.4rem;
+      padding: 0.45rem 0.65rem;
+    }
+    .btn { cursor: pointer; }
+    .form-select option { background: var(--background); color: var(--foreground); }
+  </style>
+</head>
+<body>
+<section id="vsync-alignment" aria-label="Chemin d’alignement des deux vidéos">
+  <style>
+    #vsync-alignment {
+      display: grid;
+      gap: 0.65rem;
+      color: var(--foreground);
+    }
+    #vsync-alignment h2 { margin: 0; font-weight: 500; }
+    #vsync-alignment .vs-controls, #vsync-alignment .vs-legend {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 0.55rem;
+    }
+    #vsync-alignment .vs-legend { column-gap: 1rem; }
+    #vsync-alignment .vs-legend span { display: inline-flex; align-items: center; gap: 0.35rem; }
+    #vsync-alignment .vs-swatch { width: 1.35em; height: 0.2em; border-radius: 1em; background: currentColor; }
+    #vsync-alignment .vs-d { color: var(--viz-series-1, var(--green)); }
+    #vsync-alignment .vs-h { color: var(--viz-series-2, var(--orange)); }
+    #vsync-alignment .vs-v { color: var(--viz-series-3, var(--blue)); }
+    #vsync-alignment svg { display: block; width: 100%; touch-action: none; user-select: none; }
+    #vsync-alignment .vs-grid { stroke: var(--border); pointer-events: none; }
+    #vsync-alignment .vs-ticks { fill: var(--muted-foreground); }
+    #vsync-alignment .vs-title { fill: var(--foreground); font-weight: 500; }
+    #vsync-alignment .vs-segment { stroke: currentColor; stroke-width: 3; stroke-linecap: round; }
+    #vsync-alignment .vs-change { fill: currentColor; stroke: var(--background); stroke-width: 1.4; }
+    #vsync-alignment .vs-detail { min-height: 1.4em; margin: 0; color: var(--muted-foreground); }
+  </style>
+  <h2>Chemin d’alignement</h2>
+  <div class="vs-controls">
+    <label for="vsync-window">Zone à afficher</label>
+    <select id="vsync-window" class="form-select"></select>
+    <button type="button" class="btn" data-zoom="in" aria-label="Zoomer">+</button>
+    <button type="button" class="btn" data-zoom="out" aria-label="Dézoomer">−</button>
+  </div>
+  <svg role="img" aria-labelledby="vsync-svg-title vsync-svg-desc">
+    <title id="vsync-svg-title">Chemin d’alignement de VideoProc</title>
+    <desc id="vsync-svg-desc">Les indices de la vidéo 2 augmentent vers la droite sur l’axe du haut. Ceux de la vidéo 1 augmentent vers le bas sur l’axe de gauche.</desc>
+    <defs><clipPath id="vsync-plot-clip"><rect></rect></clipPath></defs>
+    <g class="vs-grid"></g>
+    <g class="vs-path" clip-path="url(#vsync-plot-clip)"></g>
+    <g class="vs-ticks text-small"></g>
+    <g class="vs-title"></g>
+  </svg>
+  <div class="vs-legend text-small">
+    <span><i class="vs-swatch vs-d" aria-hidden="true"></i> Diagonale · les deux avancent</span>
+    <span><i class="vs-swatch vs-h" aria-hidden="true"></i> Droite · vidéo 2 seule</span>
+    <span><i class="vs-swatch vs-v" aria-hidden="true"></i> Bas · vidéo 1 seule</span>
+  </div>
+  <p class="vs-detail text-small" aria-live="polite"></p>
+  <script>
+    (() => {
+      const root = document.getElementById("vsync-alignment");
+      const raw = [[1,0,0,72,0],[2,72,0,4677,4605],[3,4677,4605,4680,4605],[4,4680,4605,4692,4617],[5,4692,4617,4696,4617],[6,4696,4617,4737,4658],[7,4737,4658,4737,4665],[8,4737,4665,12278,12206],[9,12278,12206,12278,12253],[10,12278,12253,19287,19262],[11,19287,19262,19288,19262],[12,19288,19262,19325,19299],[13,19325,19299,19325,19347],[14,19325,19347,35661,35683],[15,35661,35683,35661,35730],[16,35661,35730,39801,39870],[17,39801,39870,39801,39871],[18,39801,39871,39969,40039],[19,39969,40039,39969,40041],[20,39969,40041,39971,40041]];
+      const segments = raw.map(([id, x0, y0, x1, y1]) => ({
+        id, x0, y0, x1, y1,
+        direction: x0 === x1 ? "v" : y0 === y1 ? "h" : "d"
+      }));
+      const svg = root.querySelector("svg");
+      const select = root.querySelector("select");
+      const detail = root.querySelector(".vs-detail");
+      const grid = root.querySelector(".vs-grid");
+      const path = root.querySelector(".vs-path");
+      const tickLayer = root.querySelector(".vs-ticks");
+      const titleLayer = root.querySelector(".vs-title");
+      const clip = root.querySelector("clipPath rect");
+      const ns = "http://www.w3.org/2000/svg";
+      const format = new Intl.NumberFormat("fr-FR");
+      const groups = [];
+      for (const segment of segments.filter(s => s.direction !== "d")) {
+        const group = groups.at(-1);
+        const previous = group?.at(-1);
+        if (!previous || Math.max(segment.x0 - previous.x1, segment.y0 - previous.y1) > 90) {
+          groups.push([segment]);
+        } else {
+          group.push(segment);
+        }
+      }
+
+      function fitted(first, last, padding) {
+        const span = Math.max(last.x1 - first.x0, last.y1 - first.y0) + padding * 2;
+        return { x: (first.x0 + last.x1) / 2, y: (first.y0 + last.y1) / 2, span };
+      }
+
+      const full = fitted(segments[0], segments.at(-1), 1400);
+      const presets = [
+        { label: "Vue complète", view: full, detail: `${segments.length} segments du fichier scores.txt` },
+        ...groups.map((group, index) => {
+          const first = group[0];
+          const last = group.at(-1);
+          const span = Math.max(last.x1 - first.x0, last.y1 - first.y0);
+          const horizontal = group.reduce((sum, s) => sum + (s.direction === "h" ? s.x1 - s.x0 : 0), 0);
+          const vertical = group.reduce((sum, s) => sum + (s.direction === "v" ? s.y1 - s.y0 : 0), 0);
+          const changes = [
+            horizontal && `vidéo 2 +${horizontal}`,
+            vertical && `vidéo 1 +${vertical}`
+          ].filter(Boolean).join(" · ");
+          return {
+            label: `Zoom ${index + 1} · image ${format.format(first.y0)}`,
+            view: fitted(first, last, Math.max(7, Math.round(span * 0.18))),
+            detail: `Images supplémentaires · ${changes}`
+          };
+        })
+      ];
+      presets.forEach(({ label }, i) => select.add(new Option(label, String(i))));
+      const custom = new Option("Zoom libre", "custom");
+      custom.disabled = true;
+      select.add(custom);
+      let view = { ...full };
+      let geometry;
+      let drag;
+      let wheelTimer;
+
+      function shape(parent, tag, attributes, value) {
+        const element = document.createElementNS(ns, tag);
+        for (const [key, data] of Object.entries(attributes)) element.setAttribute(key, data);
+        if (value !== undefined) element.textContent = value;
+        parent.append(element);
+        return element;
+      }
+
+      function tickStep(span, target) {
+        const estimate = Math.max(1, span / target);
+        const magnitude = 10 ** Math.floor(Math.log10(estimate));
+        return [1, 2, 5, 10].map(factor => factor * magnitude).find(step => step >= estimate);
+      }
+
+      function render() {
+        const width = svg.clientWidth;
+        if (!width) return;
+        const gutter = width < 400 ? 62 : 78;
+        const size = Math.min(width - gutter - 17, 525);
+        if (size <= 0) return;
+        const left = gutter + Math.max(0, (width - gutter - 17 - size) / 2);
+        const top = 58;
+        const bottom = top + size;
+        const scale = size / view.span;
+        const minX = view.x - view.span / 2;
+        const minY = view.y - view.span / 2;
+        geometry = { left, top, size, scale };
+        const toX = x => left + (x - minX) * scale;
+        const toY = y => top + (y - minY) * scale;
+        svg.setAttribute("viewBox", `0 0 ${width} ${bottom + 12}`);
+        svg.setAttribute("height", bottom + 12);
+        clip.setAttribute("x", left);
+        clip.setAttribute("y", top);
+        clip.setAttribute("width", size);
+        clip.setAttribute("height", size);
+        [grid, path, tickLayer, titleLayer].forEach(layer => layer.replaceChildren());
+        const step = tickStep(view.span, width < 440 ? 3.5 : 5.5);
+        for (let x = Math.max(0, Math.ceil(minX / step) * step); x <= minX + view.span; x += step) {
+          const px = toX(x);
+          shape(grid, "line", { x1: px, x2: px, y1: top, y2: bottom });
+          shape(tickLayer, "text", { x: px, y: top - 9, "text-anchor": "middle" }, format.format(x));
+        }
+        for (let y = Math.max(0, Math.ceil(minY / step) * step); y <= minY + view.span; y += step) {
+          const py = toY(y);
+          shape(grid, "line", { x1: left, x2: left + size, y1: py, y2: py });
+          shape(tickLayer, "text", { x: left - 8, y: py + 4, "text-anchor": "end" }, format.format(y));
+        }
+        shape(grid, "rect", { x: left, y: top, width: size, height: size, fill: "none" });
+        shape(titleLayer, "text", { x: left + size / 2, y: 23, "text-anchor": "middle" }, "Images de la vidéo 2");
+        shape(titleLayer, "text", {
+          transform: `translate(${left - gutter + 14} ${top + size / 2}) rotate(-90)`,
+          "text-anchor": "middle"
+        }, "Images de la vidéo 1");
+        for (const s of segments) {
+          const color = `vs-${s.direction}`;
+          const tip = `Segment ${s.id} · V1 ${format.format(s.y0)} → ${format.format(s.y1)} · V2 ${format.format(s.x0)} → ${format.format(s.x1)}`;
+          const mark = shape(path, "line", {
+            x1: toX(s.x0), y1: toY(s.y0), x2: toX(s.x1), y2: toY(s.y1),
+            class: `vs-segment ${color}`, "data-tooltip": tip
+          });
+          shape(mark, "title", {}, tip);
+          if (s.direction !== "d" && Math.max(s.x1 - s.x0, s.y1 - s.y0) * scale < 8) {
+            const point = shape(path, "circle", {
+              cx: toX((s.x0 + s.x1) / 2), cy: toY((s.y0 + s.y1) / 2),
+              r: 4.5, class: `vs-change ${color}`, "data-tooltip": tip
+            });
+            shape(point, "title", {}, tip);
+          }
+        }
+      }
+
+      function markCustom() {
+        select.value = "custom";
+        detail.textContent = `Fenêtre de ${format.format(Math.round(view.span))} images par axe`;
+      }
+
+      function saveView() {
+        window.openai?.setWidgetState?.({ privateContent: { view, preset: select.value } })?.catch(() => {});
+      }
+
+      function applyPreset(index, save) {
+        const preset = presets[index];
+        view = { ...preset.view };
+        select.value = String(index);
+        detail.textContent = preset.detail;
+        render();
+        if (save) saveView();
+      }
+
+      function restore(state) {
+        const restored = state?.privateContent ?? state;
+        if (!restored?.view || ![restored.view.x, restored.view.y, restored.view.span].every(Number.isFinite)) return;
+        if (restored.view.span < 5 || restored.view.span > full.span * 1.6) return;
+        const preset = presets[restored.preset];
+        if (preset) {
+          applyPreset(Number(restored.preset), false);
+        } else {
+          view = { ...restored.view };
+          markCustom();
+          render();
+        }
+      }
+
+      function zoom(factor, anchorX = 0.5, anchorY = 0.5) {
+        const span = Math.min(full.span * 1.6, Math.max(5, view.span * factor));
+        view = {
+          x: view.x + (anchorX - 0.5) * (view.span - span),
+          y: view.y + (anchorY - 0.5) * (view.span - span),
+          span
+        };
+        markCustom();
+        render();
+      }
+
+      function pointInPlot(event) {
+        if (!geometry) return null;
+        const rect = svg.getBoundingClientRect();
+        const x = (event.clientX - rect.left - geometry.left) / geometry.size;
+        const y = (event.clientY - rect.top - geometry.top) / geometry.size;
+        return x >= 0 && x <= 1 && y >= 0 && y <= 1 ? { x, y } : null;
+      }
+
+      select.addEventListener("change", () => applyPreset(Number(select.value), true));
+      root.querySelectorAll("[data-zoom]").forEach(button => {
+        button.addEventListener("click", () => {
+          zoom(button.dataset.zoom === "in" ? 0.68 : 1.47);
+          saveView();
+        });
+      });
+      svg.addEventListener("wheel", event => {
+        const point = pointInPlot(event);
+        if (!point || !event.deltaY) return;
+        event.preventDefault();
+        zoom(event.deltaY < 0 ? 0.80 : 1.25, point.x, point.y);
+        clearTimeout(wheelTimer);
+        wheelTimer = setTimeout(saveView, 180);
+      }, { passive: false });
+      svg.addEventListener("pointerdown", event => {
+        if (!event.isPrimary || event.button !== 0 || !pointInPlot(event)) return;
+        drag = { id: event.pointerId, x: event.clientX, y: event.clientY, view, scale: geometry.scale };
+        svg.setPointerCapture(event.pointerId);
+      });
+      svg.addEventListener("pointermove", event => {
+        if (drag?.id !== event.pointerId) return;
+        const dx = event.clientX - drag.x;
+        const dy = event.clientY - drag.y;
+        if (!drag.moved && Math.hypot(dx, dy) < 3) return;
+        drag.moved = true;
+        view = { x: drag.view.x - dx / drag.scale, y: drag.view.y - dy / drag.scale, span: drag.view.span };
+        markCustom();
+        render();
+      });
+      function endDrag(event) {
+        if (drag?.id !== event.pointerId) return;
+        if (drag.moved) saveView();
+        drag = null;
+      }
+      svg.addEventListener("pointerup", endDrag);
+      svg.addEventListener("pointercancel", endDrag);
+      svg.addEventListener("lostpointercapture", endDrag);
+      svg.addEventListener("dblclick", event => {
+        if (pointInPlot(event)) applyPreset(0, true);
+      });
+      new ResizeObserver(render).observe(root);
+      applyPreset(0, false);
+      restore(window.openai?.widgetState);
+      window.addEventListener("openai:set_globals", event => restore(event.detail?.globals?.widgetState));
+    })();
+  </script>
+</section>
+</body>
+</html>
